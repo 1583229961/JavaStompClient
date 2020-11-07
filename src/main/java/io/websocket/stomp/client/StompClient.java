@@ -100,6 +100,14 @@ public class StompClient implements AutoCloseable {
         connect();
     }
 
+    /**
+     * Returns the key of this client instance. Each instance has a different key.
+     * @return the client key
+     */
+    public String getClientKey() {
+        return this.clientKey;
+    }
+
 
     /**
      * Subscribes and sends a request for the given topic, expecting a result of the given type and
@@ -115,12 +123,10 @@ public class StompClient implements AutoCloseable {
     @SuppressWarnings("unchecked")
 	public <T> T subscribeAndSend(String topic, Class<T> resultTypeClass, Optional<Object> payload) throws InterruptedException {
         String resultTopic = "/user/" + clientKey + topic;
-        String errorResultTopic = resultTopic + "/error";
         Object result;
 
         BlockingQueue<Object> queue = queues.computeIfAbsent(topic, _key -> new LinkedBlockingQueue<>(1));
         synchronized (queue) {
-            subscribe(errorResultTopic, ErrorModel.class, queue);
             subscribe(resultTopic, resultTypeClass, queue);
             send(topic, payload);
             result = queue.take();

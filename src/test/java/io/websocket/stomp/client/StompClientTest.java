@@ -26,6 +26,36 @@ class StompClientTest {
     }
 
     @Test
+    void stompClientAsynchronousEchoMessageTest() {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+
+        try(StompClient stompClient = new StompClient(endpoint)) {
+            String topic = "/user/" + stompClient.getClientKey() + "/echo/message";
+
+            stompClient.subscribeToTopic(topic, EchoModel.class, (result, error) -> {
+                assertEquals("hello world", result.message);
+                future.complete(true);
+            });
+
+            // start after 2 seconds
+            ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+            scheduledExecutorService.schedule(() ->
+                            stompClient.send("/echo/message", Optional.of(new EchoModel("hello world"))),
+                    2,
+                    TimeUnit.SECONDS
+            );
+            scheduledExecutorService.shutdown();
+
+
+            // wait for 4 seconds
+            future.get(4, TimeUnit.SECONDS);
+
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            fail("Connection failed");
+        }
+    }
+
+    @Test
     void stompClientAsynchronousTopicTest() {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
