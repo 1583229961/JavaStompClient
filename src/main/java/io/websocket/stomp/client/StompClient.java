@@ -107,8 +107,10 @@ public class StompClient implements AutoCloseable {
      *
      * @param topic the topic
      * @param resultTypeClass the result class type
-     * @param payload, the payload, if any
+     * @param payload the payload, if any
      * @return the result of the request
+     * @throws NetworkExceptionResponse if the server returned an error
+     * @throws InterruptedException if interrupted while waiting
      */
     @SuppressWarnings("unchecked")
 	public <T> T subscribeAndSend(String topic, Class<T> resultTypeClass, Optional<Object> payload) throws InterruptedException {

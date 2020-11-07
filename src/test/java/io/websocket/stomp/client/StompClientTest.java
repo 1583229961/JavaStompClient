@@ -13,7 +13,7 @@ class StompClientTest {
     private final String endpoint = "ws://localhost:8080/";
 
     @Test
-    void stompClientEchoMessageTest() {
+    void stompClientSynchronousEchoMessageTest() {
 
         try(StompClient stompClient = new StompClient(endpoint)) {
 
@@ -26,7 +26,7 @@ class StompClientTest {
     }
 
     @Test
-    void stompClientTopicTest() {
+    void stompClientAsynchronousTopicTest() {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
         try(StompClient stompClient = new StompClient(endpoint)) {
