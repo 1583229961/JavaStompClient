@@ -131,6 +131,7 @@ public class StompClient implements AutoCloseable {
             send(topic, payload);
             result = queue.take();
         }
+        LOGGER.info("[WsClient] Received message from topic " + topic);
 
         if (result instanceof ErrorModel)
             throw new NetworkExceptionResponse((ErrorModel) result);
@@ -146,7 +147,7 @@ public class StompClient implements AutoCloseable {
      * @param payload the payload
      */
     public void send(String destination, Optional<Object> payload) {
-        LOGGER.info("[WsClient] sending payload to destination");
+        LOGGER.info("[WsClient] Sending message to destination " + destination);
         synchronized (stompSessionLock) {
             stompSession.send(destination, payload.orElse(null));
         }
@@ -172,6 +173,7 @@ public class StompClient implements AutoCloseable {
     			@SuppressWarnings("unchecked")
     			@Override
     			public void handleFrame(StompHeaders headers, Object payload) {
+                    LOGGER.info("[WsClient] Received message from topic " + _topic);
 
     				CompletableFuture.runAsync(() -> {
     					if (payload == null)
@@ -233,7 +235,7 @@ public class StompClient implements AutoCloseable {
             throw InternalFailureException.of(e);
         }
 
-        LOGGER.info("[WsClient] Subscribed to " + topic);
+        LOGGER.info("[WsClient] Subscribed to topic " + topic);
         return stompSubscription;
     }
 
@@ -245,6 +247,8 @@ public class StompClient implements AutoCloseable {
      * @throws InterruptedException if the current thread was interrupted
      */
     private void connect() throws ExecutionException, InterruptedException {
+        LOGGER.info("[WsClient] Connection to " + this.url);
+
         WebSocketHttpHeaders headers = new WebSocketHttpHeaders();
         headers.add("uuid", clientKey);
 
@@ -252,7 +256,7 @@ public class StompClient implements AutoCloseable {
         	stompSession = stompClient.connect(url, headers, new StompClientSessionHandler(this::onSessionError)).get();
         }
 
-        LOGGER.info("[WsClient] Set STOMP session to " + stompSession.getSessionId());
+        LOGGER.info("[WsClient] Connected to stomp session " + stompSession.getSessionId());
     }
 
     private void onSessionError(Throwable throwable) {
