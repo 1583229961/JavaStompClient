@@ -2,11 +2,10 @@ package io.websocket.stomp.client;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 
 class StompClientTest {
@@ -30,14 +29,14 @@ class StompClientTest {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
         try(StompClient stompClient = new StompClient(endpoint)) {
-            String topic = "/user/" + stompClient.getClientKey() + "/echo/message";
 
+            // subscribe
+            String topic = "/user/" + stompClient.getClientKey() + "/echo/message";
             stompClient.subscribeToTopic(topic, EchoModel.class, (result, error) -> {
-                assertEquals("hello world", result.message);
-                future.complete(true);
+                future.complete("hello world".equals(result.message));
             });
 
-            // start after 2 seconds
+            // send message start after 2 seconds
             ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
             scheduledExecutorService.schedule(() ->
                             stompClient.send("/echo/message", Optional.of(new EchoModel("hello world"))),
@@ -46,9 +45,8 @@ class StompClientTest {
             );
             scheduledExecutorService.shutdown();
 
-
             // wait for 4 seconds
-            future.get(4, TimeUnit.SECONDS);
+            assertTrue(future.get(4, TimeUnit.SECONDS));
 
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             fail("Connection failed");
@@ -62,8 +60,7 @@ class StompClientTest {
         try(StompClient stompClient = new StompClient(endpoint)) {
 
             stompClient.subscribeToTopic("/topic/events", Event.class, (result, error) -> {
-                assertEquals("testing event topic", result.name);
-                future.complete(true);
+                future.complete("testing event topic".equals(result.name));
             });
 
 
@@ -76,9 +73,57 @@ class StompClientTest {
             );
             scheduledExecutorService.shutdown();
 
+            // wait for 4 seconds
+            assertTrue(future.get(4, TimeUnit.SECONDS));
+
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            fail("Connection failed");
+        }
+    }
+
+
+    @Test
+    void concurrentlySendEchoMessages() {
+        int numOfThreads = 4;
+        ExecutorService pool = Executors.newCachedThreadPool();
+        CompletableFuture<Boolean> completableFuture = new CompletableFuture<>();
+        Map<String, Boolean> results = new HashMap<>(numOfThreads);
+
+
+        try(StompClient stompClient = new StompClient(endpoint)) {
+
+            // subscribe
+            String topic = "/user/" + stompClient.getClientKey() + "/echo/message";
+            stompClient.subscribeToTopic(topic, EchoModel.class, (result, error) -> {
+                results.put(result.message, true);
+            });
+
+            List<StompClientSendWorker> workers = new ArrayList<>();
+            for (int i = 0; i < numOfThreads; i++) {
+                workers.add(new StompClientSendWorker(new EchoModel("hello world " + i), stompClient, pool));
+            }
+
+            // start after 2 seconds
+            ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+            scheduledExecutorService.schedule(() -> {
+                        workers.parallelStream().forEach(StompClientSendWorker::call);
+                        pool.shutdown();
+                    },
+                    2,
+                    TimeUnit.SECONDS
+            );
+
+            scheduledExecutorService.schedule(() -> {
+                        completableFuture.complete(results.values().parallelStream().allMatch(ok -> ok));
+                    },
+                    3,
+                    TimeUnit.SECONDS
+            );
+            scheduledExecutorService.shutdown();
+
 
             // wait for 4 seconds
-            future.get(4, TimeUnit.SECONDS);
+            assertTrue(completableFuture.get(6, TimeUnit.SECONDS));
 
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             fail("Connection failed");
@@ -108,4 +153,21 @@ class StompClientTest {
         }
     }
 
+    private static class StompClientSendWorker {
+        private final EchoModel echoModel;
+        private final StompClient stompClient;
+        private final ExecutorService pool;
+
+        public StompClientSendWorker(EchoModel echoModel, StompClient stompClient, ExecutorService pool) {
+            this.echoModel = echoModel;
+            this.stompClient = stompClient;
+            this.pool = pool;
+        }
+
+        public void call() {
+            CompletableFuture.runAsync(() -> {
+                stompClient.send("/echo/message", Optional.of(echoModel));
+            }, pool);
+        }
+    }
 }
